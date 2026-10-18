@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SkyCheck – Air Quality & Weather</title>
+
+    <!-- Google Fonts: Plus Jakarta Sans for ultra-clean mobile weather aesthetics -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+
+    <!-- Chart.js for 7-Day AQI Historical Chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- App Stylesheet -->
+    <link rel="stylesheet" href="app.css">
+</head>
+
+<body>
+
+    <div class="app-viewport">
+        <div class="mobile-frame">
+
+            <!-- 2. Header (Hamburger Menu, Location Name & Pin, Actions) -->
+            <header class="app-header">
+                <button id="menuToggleBtn" class="header-icon-btn" aria-label="Open navigation menu" title="Menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="location-title-wrap" id="locationTitleBtn" role="button" tabindex="0" title="Click to search location">
+                    <div class="location-text-col">
+                        <div class="location-name-row">
+                            <span id="cityName" class="location-name">CGS Colony</span>
+                            <span id="liveGpsBadge" class="live-gps-badge" style="display: none;" title="GPS Live Tracking Active">
+                                <i class="fa-solid fa-satellite-dish"></i> Live
+                            </span>
+                        </div>
+                        <div id="locationCoordsSubtitle" class="location-coords-sub"></div>
+                    </div>
+                    <i class="fa-solid fa-location-dot location-pin"></i>
+                </div>
+                <div class="header-right-actions">
+                    <button id="searchToggleBtn" class="header-icon-btn" aria-label="Search locations" title="Search city or locality">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </button>
+                    <button id="headerLocationBtn" class="header-icon-btn" aria-label="Use current location" title="Detect my live GPS location">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                    </button>
+                    <button id="headerRefreshBtn" class="header-icon-btn" aria-label="Refresh data" title="Refresh AQI and weather">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Location Permission / Status Notice Toast -->
+            <div id="locationNotice" class="location-notice-banner" style="display: none;">
+                <div class="notice-icon"><i class="fa-solid fa-circle-info"></i></div>
+                <div class="notice-text" id="locationNoticeText"></div>
+                <button id="dismissNoticeBtn" class="notice-close-btn" aria-label="Dismiss notice"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- 3. Search Bar Overlay (Smooth animated modal) -->
+            <div id="searchBarOverlay" class="search-overlay">
+                <div class="search-box-card">
+                    <div class="location-quick-actions">
+                        <button id="useCurrentLocationBtn" class="btn-current-location" type="button">
+                            <span><i class="fa-solid fa-location-crosshairs"></i> Use My Current Location</span>
+                            <span class="gps-pill">GPS</span>
+                        </button>
+                    </div>
+                    <div class="search-input-group">
+                        <i class="fa-solid fa-magnifying-glass search-leading-icon"></i>
+                        <input type="text" id="cityInput" placeholder="Search City, Colony, Area or Pincode..." autocomplete="off">
+                        <button id="clearSearchBtn" class="clear-search-btn" aria-label="Clear search input">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <div class="quick-locations">
+                        <span class="quick-loc-label">Popular:</span>
+                        <button class="quick-pill" data-loc="CGS Colony">CGS Colony</button>
+                        <button class="quick-pill" data-loc="Mumbai">Mumbai</button>
+                        <button class="quick-pill" data-loc="Delhi">Delhi</button>
+                        <button class="quick-pill" data-loc="Bengaluru">Bengaluru</button>
+                        <button class="quick-pill" data-loc="Pune">Pune</button>
+                    </div>
+                    <div id="locationDropdown" class="location-dropdown"></div>
+                </div>
+            </div>
+
+            <!-- 4. Scrollable Main Content -->
+            <main class="dashboard-scroll" id="dashboardScroll">
+
+                <!-- MAIN CARD: AQI Indicator & Progress Bar -->
+                <section class="card aqi-card" id="aqiMainCard">
+                    <div class="aqi-card-top-label">AQI</div>
+                    <h1 id="aqiSummary" class="aqi-card-summary">Poor (228)</h1>
+                    <div class="aqi-pill-track">
+                        <div id="aqiPillFill" class="aqi-pill-fill" style="width: 52%; background-color: #ff9100;"></div>
+                    </div>
+                </section>
+
+                <!-- 2x3 WEATHER INFORMATION GRID (Exact 2-Column Translucent Layout) -->
+                <section class="metrics-grid" id="metricsGrid" aria-label="Weather conditions">
+                    <!-- UV Index -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fa-regular fa-sun metric-icon"></i>
+                            <span class="metric-label">UV index</span>
+                        </div>
+                        <div id="uvValue" class="metric-value">Very High</div>
+                    </div>
+
+                    <!-- Humidity -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="custom-humidity-icon metric-icon"><i class="fa-solid fa-droplet"></i></span>
+                            <span class="metric-label">Humidity</span>
+                        </div>
+                        <div id="humidityValue" class="metric-value">48%</div>
+                    </div>
+
+                    <!-- Wind -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fa-solid fa-wind metric-icon"></i>
+                            <span class="metric-label">Wind</span>
+                        </div>
+                        <div class="metric-value wind-value-row">
+                            <span id="windArrow" class="wind-arrow">↙</span>
+                            <span id="windValue">11 km/h</span>
+                        </div>
+                    </div>
+
+                    <!-- Dew point -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fa-solid fa-temperature-half metric-icon"></i>
+                            <span class="metric-label">Dew point</span>
+                        </div>
+                        <div id="dewValue" class="metric-value">21°</div>
+                    </div>
+
+                    <!-- Pressure -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <!-- Custom atmospheric gauge icon matching screenshot -->
+                            <svg class="metric-icon pressure-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <line x1="12" y1="12" x2="16" y2="8"></line>
+                                <line x1="8" y1="12" x2="10" y2="12"></line>
+                                <line x1="12" y1="16" x2="12" y2="14"></line>
+                            </svg>
+                            <span class="metric-label">Pressure</span>
+                        </div>
+                        <div id="pressureValue" class="metric-value">1011.2 mb</div>
+                    </div>
+
+                    <!-- Visibility -->
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <i class="fa-regular fa-eye metric-icon"></i>
+                            <span class="metric-label">Visibility</span>
+                        </div>
+                        <div id="visibilityValue" class="metric-value">2.57 km</div>
+                    </div>
+                </section>
+
+                <!-- 4. ADVANCED HISTORICAL AQI & POLLUTANT ANALYTICS DASHBOARD -->
+                <section class="card history-section-card" id="historySectionCard">
+                    <div class="section-card-top">
+                        <div class="section-card-title">
+                            <i class="fa-solid fa-chart-line history-heading-icon"></i>
+                            <span>Historical Analytics</span>
+                        </div>
+                        <div class="range-controls-group" id="historyRangeGroup" role="group" aria-label="Historical time range">
+                            <button class="range-pill active" data-days="7" id="btnRange7">7D</button>
+                            <button class="range-pill" data-days="14" id="btnRange14">14D</button>
+                            <button class="range-pill" data-days="30" id="btnRange30">30D</button>
+                        </div>
+                    </div>
+
+                    <!-- Metric Trend Comparison Tabs -->
+                    <div class="metric-tabs-strip" id="metricTabsStrip">
+                        <button class="metric-tab-pill active" data-metric="aqi" id="tabMetricAqi">
+                            <i class="fa-solid fa-gauge-high"></i> AQI Trend
+                        </button>
+                        <button class="metric-tab-pill" data-metric="pm25" id="tabMetricPm25">
+                            <i class="fa-solid fa-smog"></i> PM2.5
+                        </button>
+                        <button class="metric-tab-pill" data-metric="pm10" id="tabMetricPm10">
+                            <i class="fa-solid fa-wind"></i> PM10
+                        </button>
+                        <button class="metric-tab-pill" data-metric="compare" id="tabMetricCompare">
+                            <i class="fa-solid fa-layer-group"></i> Compare All
+                        </button>
+                    </div>
+
+                    <!-- CPCB NAQI Category Reference Legend -->
+                    <div class="history-legend-bar">
+                        <span class="legend-item"><span class="legend-dot dot-good"></span> Good (0-50)</span>
+                        <span class="legend-item"><span class="legend-dot dot-sat"></span> Satisfactory (51-100)</span>
+                        <span class="legend-item"><span class="legend-dot dot-mod"></span> Moderate (101-200)</span>
+                        <span class="legend-item"><span class="legend-dot dot-poor"></span> Poor (201-300)</span>
+                        <span class="legend-item"><span class="legend-dot dot-vpoor"></span> Very Poor (301-400)</span>
+                        <span class="legend-item"><span class="legend-dot dot-severe"></span> Severe (401+)</span>
+                    </div>
+
+                    <!-- Interactive Chart.js Canvas Wrapper -->
+                    <div class="chart-canvas-wrapper" id="chartCanvasWrapper">
+                        <canvas id="aqiChart" aria-label="Historical AQI and pollutant time-series chart"></canvas>
+                    </div>
+
+                    <!-- Period Summary Statistics Grid -->
+                    <div class="history-stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">Period Avg</span>
+                            <div class="stat-value-row">
+                                <strong id="statWeeklyAvg" class="stat-num">--</strong>
+                                <span id="statWeeklyCat" class="stat-sub">Moderate</span>
+                            </div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Best Day</span>
+                            <div class="stat-value-row">
+                                <strong id="statBestDay" class="stat-num">--</strong>
+                                <span id="statBestVal" class="stat-sub text-good">--</span>
+                            </div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Worst Day</span>
+                            <div class="stat-value-row">
+                                <strong id="statWorstDay" class="stat-num">--</strong>
+                                <span id="statWorstVal" class="stat-sub text-poor">--</span>
+                            </div>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label" id="statTrendLabel">Trend & Change</span>
+                            <div class="stat-value-row">
+                                <strong id="statChangeVal" class="stat-num">--</strong>
+                                <span id="statChangeTrend" class="stat-sub">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trend Narrative Analysis Banner -->
+                    <div class="trend-narrative-banner" id="trendNarrativeBanner">
+                        <i class="fa-solid fa-circle-info narrative-icon"></i>
+                        <span id="trendNarrativeText">Analyzing historical atmospheric trends...</span>
+                    </div>
+
+                    <!-- Daily Air Quality Breakdown Strip -->
+                    <div class="daily-strip-container">
+                        <div class="daily-strip-header">
+                            <span>Daily Breakdown & Coverage</span>
+                            <span id="historyDataNote" class="data-note-text">Live observation network</span>
+                        </div>
+                        <div id="dailyStripList" class="daily-strip-list">
+                            <!-- Populated dynamically by app.js -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. AIR POLLUTANT MEASUREMENTS CARD -->
+                <section class="card pollutants-section-card" id="pollutantsCard">
+                    <div class="section-card-top">
+                        <div class="section-card-title">
+                            <i class="fa-solid fa-smog"></i>
+                            <span>Air Pollutant Breakdown</span>
+                        </div>
+                        <span class="pollutant-unit-badge">Real-Time Sensor Values</span>
+                    </div>
+                    <div class="pollutants-grid" id="pollutantsGrid">
+                        <!-- PM2.5 -->
+                        <div class="pollutant-pill" id="pPill_pm25">
+                            <div class="pollutant-meta">
+                                <div class="p-title-row">
+                                    <span class="p-name">PM2.5</span>
+                                    <span class="p-unit">µg/m³</span>
+                                </div>
+                                <span class="p-desc">Fine Particulate</span>
+                            </div>
+                            <div class="pollutant-val-col">
+                                <strong id="pm25Val" class="p-val">--</strong>
+                                <span id="pm25Severity" class="p-sev-badge sev-mod">Moderate</span>
+                            </div>
+                        </div>
+
+                        <!-- PM10 -->
+                        <div class="pollutant-pill" id="pPill_pm10">
+                            <div class="pollutant-meta">
+                                <div class="p-title-row">
+                                    <span class="p-name">PM10</span>
+                                    <span class="p-unit">µg/m³</span>
+                                </div>
+                                <span class="p-desc">Coarse Dust</span>
+                            </div>
+                            <div class="pollutant-val-col">
+                                <strong id="pm10Val" class="p-val">--</strong>
+                                <span id="pm10Severity" class="p-sev-badge sev-poor">High</span>
+                            </div>
+                        </div>
+
+                        <!-- NO2 -->
+                        <div class="pollutant-pill" id="pPill_no2">
+                            <div class="pollutant-meta">
+                                <div class="p-title-row">
+                                    <span class="p-name">NO₂</span>
+                                    <span class="p-unit">µg/m³</span>
+                                </div>
+                                <span class="p-desc">Nitrogen Dioxide</span>
+                            </div>
+                            <div class="pollutant-val-col">
+                                <strong id="no2Val" class="p-val">--</strong>
+                                <span id="no2Severity" class="p-sev-badge sev-good">Normal</span>
+                            </div>
+                        </div>
+
+                        <!-- SO2 -->
+                        <div class="pollutant-pill" id="pPill_so2">
+                            <div class="pollutant-meta">
+                                <div class="p-title-row">
+                                    <span class="p-name">SO₂</span>
+                                    <span class="p-unit">µg/m³</span>
+                                </div>
+                                <span class="p-desc">Sulfur Dioxide</span>
+                            </div>
+                            <div class="pollutant-val-col">
+                                <strong id="so2Val" class="p-val">--</strong>
+                                <span id="so2Severity" class="p-sev-badge sev-good">Normal</span>
+                            </div>
+                        </div>
+
+                        <!-- CO (mg/m³) -->
+                        <div class="pollutant-pill" id="pPill_co">
+                            <div class="pollutant-meta">
+                                <div class="p-title-row">
+                                    <span class="p-name">CO</span>
+                                    <span class="p-unit">mg/m³</span>
+                                </div>
+                                <span class="p-desc">Carbon Monoxide</span>
+                            </div>
+                            <div class="pollutant-val-col">
+                                <strong id="coVal" class="p-val">--</strong>
+                                <span id="coSeverity" class="p-sev-badge sev-good">Low</span>
+                            </div>
+                        </div>
+
+                        <!-- O3 -->
+                        <div class="pollutant-pill" id="pPill_o3">
+                            <div class="pollutant-meta">
+                                <div class="p-title-row">
+                                    <span class="p-name">O₃</span>
+                                    <span class="p-unit">µg/m³</span>
+                                </div>
+                                <span class="p-desc">Ground Ozone</span>
+                            </div>
+                            <div class="pollutant-val-col">
+                                <strong id="o3Val" class="p-val">--</strong>
+                                <span id="o3Severity" class="p-sev-badge sev-good">Normal</span>
+                            </div>
+                        </div>
+
+                        <!-- NH3 -->
+                        <div class="pollutant-pill" id="pPill_nh3" style="display: none;">
+                            <div class="pollutant-meta">
+                                <div class="p-title-row">
+                                    <span class="p-name">NH₃</span>
+                                    <span class="p-unit">µg/m³</span>
+                                </div>
+                                <span class="p-desc">Ammonia</span>
+                            </div>
+                            <div class="pollutant-val-col">
+                                <strong id="nh3Val" class="p-val">--</strong>
+                                <span id="nh3Severity" class="p-sev-badge sev-good">Normal</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. AI HEALTH RECOMMENDATION ADVISORY CARD -->
+                <section class="card advisory-section-card" id="advisoryCard">
+                    <div class="section-card-top">
+                        <div class="section-card-title">
+                            <i class="fa-solid fa-shield-heart advisory-icon"></i>
+                            <span>AI Health Advisory</span>
+                        </div>
+                    </div>
+                    <p id="aiAdvisoryText" class="advisory-text">Loading recommendations for current atmospheric conditions...</p>
+                </section>
+
+                <!-- 7. GOVERNMENT ENVIRONMENTAL GRIEVANCE & COMPLAINT SYSTEM -->
+                <section class="card authority-section-card" id="authorityCard">
+                    <div class="section-card-top">
+                        <div class="section-card-title">
+                            <i class="fa-solid fa-building-flag"></i>
+                            <span>Government Environmental Authority</span>
+                        </div>
+                        <span id="authorityVerifyBadge" class="authority-badge-verified">
+                            <i class="fa-solid fa-circle-check"></i> Verified
+                        </span>
+                    </div>
+
+                    <!-- Authority Jurisdiction & Official Routing Preview Card -->
+                    <div class="authority-preview-box">
+                        <div class="auth-name-row">
+                            <i class="fa-solid fa-landmark auth-landmark-icon"></i>
+                            <div class="auth-name-col">
+                                <strong id="authorityNameDisplay" class="auth-primary-name">Brihanmumbai Municipal Corporation (BMC)</strong>
+                                <span id="authorityJurisdictionDisplay" class="auth-jurisdiction-text">Jurisdiction: Ward F/North (Antop Hill, Wadala, Matunga)</span>
+                            </div>
+                        </div>
+                        <div class="auth-routing-note" id="authorityRoutingNote">
+                            Direct ward office matched for local area. Escalation copy routed to State Pollution Control Board.
+                        </div>
+                        <div class="auth-source-meta" id="authoritySourceMeta">
+                            <span>Source: <a href="https://portal.mcgm.gov.in" id="authoritySourceLink" target="_blank" rel="noopener">portal.mcgm.gov.in</a></span>
+                            <span id="authorityVerifyDate">Verified: March 2026</span>
+                        </div>
+                    </div>
+
+                    <div id="mailStatus" class="mail-status-banner" style="display: none;"></div>
+
+                    <!-- Action Buttons -->
+                    <div class="authority-actions-wrap">
+                        <button id="openComplaintModalBtn" class="mail-action-btn primary-report-btn">
+                            <i class="fa-solid fa-bullhorn"></i>
+                            <span>Report Air Pollution / Send Complaint</span>
+                        </button>
+                        <a id="authorityPortalLink" href="https://sameer.cpcb.gov.in" target="_blank" rel="noopener" class="authority-portal-btn">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            <span>Open Official Portal (CPCB / SAMEER)</span>
+                        </a>
+                    </div>
+                </section>
+
+                <!-- Footer Timestamp -->
+                <footer class="dashboard-footer">
+                    <span id="lastUpdatedTag">Updated just now</span>
+                    <span>Indian NAQI (CPCB) Standard</span>
+                </footer>
+
+                <div class="scroll-bottom-spacer"></div>
+            </main>
+
+            <!-- 8. OFFICIAL AIR POLLUTION COMPLAINT MODAL (FEATURE B) -->
+            <!-- Citizen Environmental Complaint Modal (Civic / Government Standard) -->
+            <div id="complaintModalOverlay" class="civic-modal-overlay modal-overlay" aria-hidden="true">
+                <div class="civic-modal modal-container" role="dialog" aria-labelledby="modalTitle" aria-modal="true">
+                    
+                    <!-- Civic Modal Header -->
+                    <div class="civic-modal-header modal-header">
+                        <div class="civic-header-left">
+                            <div class="civic-badge-gov">
+                                <i class="fa-solid fa-landmark"></i> Official Citizen Environmental Redressal
+                            </div>
+                            <h2 id="modalTitle" class="civic-modal-title modal-title">File Air Pollution Complaint</h2>
+                            <p class="civic-modal-sub modal-sub">Draft an official environmental grievance for statutory review and inspection.</p>
+                        </div>
+                        <button id="closeComplaintModalBtn" class="civic-close-btn modal-close-btn" aria-label="Close complaint modal" title="Close (Esc)">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <!-- Civic Status Bar -->
+                    <div class="civic-status-bar" id="civicStatusBar">
+                        <div class="civic-status-left">
+                            <span class="status-indicator-dot"></span>
+                            <span id="civicStatusText">Complaint email ready for review</span>
+                        </div>
+                        <div class="civic-ref-badge" id="civicRefBadge">
+                            <span class="ref-badge-label">Reference ID:</span>
+                            <strong id="modalRefIdDisplay">SKY - 2026 - PENDING</strong>
+                            <span id="refStorageLabel" class="ref-storage-hint">(Draft in local session)</span>
+                        </div>
+                    </div>
+
+                    <!-- Status / Validation Banner -->
+                    <div id="modalStatusBanner" class="civic-alert-banner modal-status-banner" style="display: none;" role="alert"></div>
+
+                    <!-- Modal Scrollable Content Body -->
+                    <div class="civic-modal-body modal-body" id="complaintModalBody">
+
+                        <!-- Section 1: Complainant Details -->
+                        <div class="civic-section">
+                            <div class="civic-form-row">
+                                <div class="civic-field civic-col-6">
+                                    <label for="complaintUserName" class="civic-label">
+                                        Your Full Name <span class="civic-req">*</span>
+                                    </label>
+                                    <input type="text" id="complaintUserName" class="civic-input" placeholder="e.g. Rajesh Sharma" autocomplete="name" required value="Concerned Citizen">
+                                    <span class="civic-help">Identifies the complainant in the formal report.</span>
+                                </div>
+                                <div class="civic-field civic-col-6">
+                                    <label for="complaintUserEmail" class="civic-label">
+                                        Your Contact Email <span class="civic-opt">(Optional)</span>
+                                    </label>
+                                    <input type="email" id="complaintUserEmail" class="civic-input" placeholder="citizen@example.com" autocomplete="email">
+                                    <span class="civic-help">Authorities use this to reply with inspection findings.</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Location & Designated Statutory Authority -->
+                        <div class="civic-section civic-panel">
+                            <div class="civic-panel-head">
+                                <span class="civic-panel-title">
+                                    <i class="fa-solid fa-location-dot"></i> Incident Location & Competent Authority
+                                </span>
+                                <span id="authorityVerifyBadge" class="civic-pill-tag">Auto-Resolved</span>
+                            </div>
+                            
+                            <div class="civic-panel-body">
+                                <div class="civic-field">
+                                    <label for="complaintLocationInput" class="civic-label">
+                                        Incident Location / Street / Landmark <span class="civic-req">*</span>
+                                    </label>
+                                    <input type="text" id="complaintLocationInput" class="civic-input" placeholder="e.g. Asalpha" required>
+                                    <div class="civic-location-meta">
+                                        <i class="fa-solid fa-map-pin"></i>
+                                        <span id="modalLocDetails">Kamani, Asalpha, L Ward, Mumbai Zone 5, Mumbai, Mumbai Suburban District, Maharashtra, 400086, India</span>
+                                    </div>
+                                </div>
+
+                                <div class="civic-auth-box">
+                                    <div class="civic-auth-title" id="modalAuthName">Brihanmumbai Municipal Corporation (BMC) – Central Environment Management & Disaster Control</div>
+                                    <div class="civic-auth-scope" id="modalAuthRouting">Jurisdiction: Greater Mumbai Jurisdiction (Fallback for general Mumbai locations)</div>
+                                </div>
+
+                                <!-- Unverified Authority Warning -->
+                                <div id="authorityVerifyWarning" class="civic-alert-callout warning" style="display: none;" role="alert">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <div>
+                                        <strong>No verified authority email available for this jurisdiction.</strong>
+                                        <p>Government contacts are never fabricated. Please select a verified statutory authority from the dropdown below or enter an official municipal email address.</p>
+                                    </div>
+                                </div>
+
+                                <div class="civic-field" style="margin-top: 10px;">
+                                    <label for="complaintRecipientEmail" class="civic-label">
+                                        Official Recipient Authority Email <span class="civic-req">*</span>
+                                    </label>
+                                    <div class="civic-input-btn-row">
+                                        <input type="email" id="complaintRecipientEmail" class="civic-input" placeholder="dmc.env@mcgm.gov.in" required>
+                                        <button type="button" id="copyToBtn" class="civic-copy-btn" title="Copy recipient email">
+                                            <i class="fa-solid fa-copy"></i> Copy
+                                        </button>
+                                    </div>
+                                    <span class="civic-help">Pre-filled from statutory government directory. Never guessed.</span>
+                                </div>
+
+                                <div class="civic-field" style="margin-top: 8px;">
+                                    <label for="authoritySelector" class="civic-label">
+                                        Change / Select Verified Authority <span class="civic-opt">(Optional)</span>
+                                    </label>
+                                    <select id="authoritySelector" class="civic-select">
+                                        <option value="">-- Keep Auto-Resolved Authority --</option>
+                                    </select>
+                                </div>
+
+                                <div id="modalPortalLinkWrap" class="civic-portal-link-wrap">
+                                    <a id="modalPortalLink" href="https://sameer.cpcb.gov.in" target="_blank" rel="noopener" class="civic-ext-link">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Official CPCB SAMEER Grievance Portal
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Pollution Observation & Environmental Sensor Readings -->
+                        <div class="civic-section">
+                            <div class="civic-form-row">
+                                <div class="civic-field civic-col-6">
+                                    <label for="complaintSourceSelect" class="civic-label">
+                                        Observed Pollution Source <span class="civic-opt">(Optional)</span>
+                                    </label>
+                                    <select id="complaintSourceSelect" class="civic-select">
+                                        <option value="Construction Dust & Uncovered Debris">Construction Dust & Uncovered Debris</option>
+                                        <option value="Waste / Garbage / Plastic Burning">Waste / Garbage / Plastic Burning</option>
+                                        <option value="Industrial Chimney / Chemical Emissions">Industrial Chimney / Chemical Emissions</option>
+                                        <option value="Heavy Vehicular Traffic & Engine Idling">Heavy Vehicular Traffic & Engine Idling</option>
+                                        <option value="Biomass / Crop Residue / Leaf Burning">Biomass / Crop Residue / Leaf Burning</option>
+                                        <option value="Road Dust & Heavy Vehicle Tracking">Road Dust & Heavy Vehicle Tracking</option>
+                                        <option value="Generator Set / Diesel Exhaust">Generator Set / Diesel Exhaust</option>
+                                        <option value="Chemical Odor / Toxic Fumes">Chemical Odor / Toxic Fumes</option>
+                                        <option value="Other Environmental Violation">Other Environmental Violation</option>
+                                    </select>
+                                </div>
+
+                                <div class="civic-field civic-col-6">
+                                    <label class="civic-label">
+                                        Sensor Observations <span class="civic-opt" id="aqiAvailabilityTag">Sensor data</span>
+                                    </label>
+                                    <div class="civic-sensor-row" id="modalAqiStrip">
+                                        <div class="civic-aqi-badge" id="modalAqiBadge">
+                                            <span class="m-label">CPCB AQI</span>
+                                            <strong id="modalAqiNum" class="m-val">--</strong>
+                                            <span id="modalAqiCat" class="m-cat">--</span>
+                                        </div>
+                                        <div class="civic-sensor-metrics">
+                                            <div>PM2.5: <strong id="modalPm25">--</strong> | PM10: <strong id="modalPm10">--</strong></div>
+                                            <div style="color: #64748b; font-size: 10.5px;"><i class="fa-regular fa-clock"></i> Measured: <span id="modalTimestamp">Just now</span></div>
+                                        </div>
+                                    </div>
+                                    <div id="noAqiNotice" class="civic-no-aqi" style="display: none;">
+                                        <i class="fa-solid fa-circle-info"></i> No live sensor data currently available.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 4: Incident Description -->
+                        <div class="civic-section" style="margin-top: 10px;">
+                            <div class="civic-label-wrap" style="display: flex; justify-content: space-between; align-items: center;">
+                                <label for="complaintDescInput" class="civic-label">
+                                    Incident Description <span class="civic-req">*</span>
+                                </label>
+                                <span id="charCountLabel" class="civic-char-counter">0 / 3000</span>
+                            </div>
+                            <textarea id="complaintDescInput" class="civic-textarea" rows="4" placeholder="Describe the pollution event, exact street landmark, time observed, intensity, or responsible entity (minimum 10 characters)..." required></textarea>
+                            
+                            <!-- Quick Insert Chips -->
+                            <div class="civic-chips-row">
+                                <span class="civic-chips-label">Quick insert:</span>
+                                <button type="button" class="civic-chip" data-text="Dense smoke and toxic burning smell observed in the residential area.">Toxic Smoke</button>
+                                <button type="button" class="civic-chip" data-text="Uncovered construction site generating severe airborne dust clouds.">Dust Clouds</button>
+                                <button type="button" class="civic-chip" data-text="Illegal burning of municipal waste and plastic in open ground.">Plastic Burning</button>
+                            </div>
+                        </div>
+
+                        <!-- Section 5: Photo Evidence -->
+                        <div class="civic-section" style="margin-top: 10px;">
+                            <label class="civic-label">Photo Evidence <span class="civic-opt">(Optional, Max 5MB JPG/PNG/WEBP)</span></label>
+                            <div class="civic-upload-zone" id="uploadDropZone">
+                                <input type="file" id="complaintPhotoInput" class="file-input-hidden" accept="image/jpeg,image/png,image/webp" style="display:none;">
+                                <div id="uploadPrompt" class="civic-upload-prompt">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                                    <span>Click or drag image evidence here</span>
+                                </div>
+                                <div id="photoPreviewWrap" class="photo-preview-wrap" style="display: none; align-items: center; justify-content: space-between;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <img id="photoPreviewImg" class="photo-preview-img" alt="Uploaded pollution evidence preview" style="max-height: 40px; border-radius: 4px;">
+                                        <span id="photoPreviewName" style="font-size: 11.5px; color: #0f172a;">evidence.jpg</span>
+                                    </div>
+                                    <button type="button" id="removePhotoBtn" class="civic-btn-danger-sm"><i class="fa-solid fa-trash-can"></i> Remove</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 6: Consent -->
+                        <div class="civic-section" style="margin-top: 10px;">
+                            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 11.5px; line-height: 1.45; color: #334155;">
+                                <input type="checkbox" id="complaintConsentCheckbox" checked required style="margin-top: 2px;">
+                                <span>I confirm that this report describes an actual environmental condition. Clicking <strong>Generate Email / Open Email App</strong> will prepare a prefilled email in my mail application for final review and sending.</span>
+                            </label>
+                        </div>
+
+                        <!-- Fallback / Copy Details Box (Displayed when email composer is requested) -->
+                        <div id="fallbackNoticeBox" class="civic-notice-box" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px;">
+                            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #92400e;">
+                                <i class="fa-solid fa-clipboard-list"></i>
+                                <span>Email App Didn't Open? Copy Details Below</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 6px 10px; border-radius: 5px; border: 1px solid #fde68a;">
+                                <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px;">
+                                    <span style="color: #64748b;">To:</span> <strong id="fallbackTo">authority@gov.in</strong>
+                                </div>
+                                <button type="button" id="copyToBtnModal" class="civic-copy-btn"><i class="fa-solid fa-copy"></i> Copy To</button>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 6px 10px; border-radius: 5px; border: 1px solid #fde68a;">
+                                <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px;">
+                                    <span style="color: #64748b;">Subject:</span> <strong id="fallbackSubject">Air Pollution Complaint</strong>
+                                </div>
+                                <button type="button" id="copySubjectBtn" class="civic-copy-btn"><i class="fa-solid fa-copy"></i> Copy Subject</button>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <textarea id="fallbackBody" class="civic-textarea" rows="4" readonly style="font-size: 11px;"></textarea>
+                                <div style="display: flex; gap: 6px;">
+                                    <button type="button" id="copyBodyBtn" class="civic-copy-btn" style="flex: 1; justify-content: center;"><i class="fa-solid fa-copy"></i> Copy Body</button>
+                                    <button type="button" id="copyAllDetailsBtn" class="civic-copy-btn" style="flex: 1; justify-content: center;"><i class="fa-solid fa-copy"></i> Copy All Details</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div> <!-- /civic-modal-body -->
+
+                    <!-- Sticky Modal Footer -->
+                    <div class="modal-footer civic-modal-footer" id="complaintModalFooter">
+                        <div class="civic-footer-left">
+                            <button type="button" id="cancelComplaintBtn" class="civic-btn-secondary modal-secondary-btn">Close</button>
+                            <button type="button" id="testEmailBtn" class="civic-btn-secondary modal-secondary-btn" title="Send a safe test verification email to your email address via SMTP">
+                                <i class="fa-solid fa-flask"></i>
+                                <span id="testEmailBtnText">Send Test to Me</span>
+                            </button>
+                        </div>
+                        <div class="civic-footer-right">
+                            <button type="button" id="openGmailBtn" class="civic-btn-gmail modal-secondary-btn btn-gmail" title="Open Gmail compose tab with prefilled complaint">
+                                <i class="fa-brands fa-google"></i>
+                                <span>Open Gmail</span>
+                            </button>
+                            <button type="button" id="submitComplaintBtn" class="civic-btn-primary modal-primary-btn">
+                                <i class="fa-solid fa-envelope-open-text"></i>
+                                <span id="submitComplaintBtnText">Generate Email / Open Email App</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Modal Success View (Device Fallback View) -->
+                    <div id="modalSuccessView" class="modal-success-view" style="display: none; padding: 24px; text-align: center;">
+                        <div style="font-size: 38px; color: #16a34a; margin-bottom: 12px;">
+                            <i class="fa-solid fa-circle-check"></i>
+                        </div>
+                        <h3 style="font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 6px;">Complaint Prepared</h3>
+                        <p id="successAuthorityName" style="font-size: 12.5px; color: #64748b; margin-bottom: 14px;">Addressed to Designated Environmental Authority</p>
+                        <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; margin-bottom: 16px;">
+                            <span style="font-size: 11px; color: #64748b; display: block;">Reference ID</span>
+                            <strong id="successRefId" style="font-size: 16px; color: #1e3a8a; letter-spacing: 0.5px; font-family: monospace;">SKY-2026-PENDING</strong>
+                        </div>
+                        <div style="display: flex; gap: 8px; justify-content: center;">
+                            <button type="button" id="copyRefIdBtn" class="civic-btn-secondary modal-secondary-btn">
+                                <i class="fa-solid fa-copy"></i> Copy Ref ID
+                            </button>
+                            <button type="button" id="closeSuccessModalBtn" class="civic-btn-primary modal-primary-btn">
+                                Done
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Slide-Out Side Navigation Drawer -->
+            <aside id="sideMenu" class="side-drawer" aria-hidden="true">
+                <div class="drawer-header">
+                    <div class="drawer-title-group">
+                        <h2>SkyCheck</h2>
+                        <span class="drawer-version">AirGuard AI</span>
+                    </div>
+                    <button id="closeMenuBtn" class="drawer-close-btn" aria-label="Close menu">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="drawer-nav">
+                    <button class="drawer-nav-item" id="menuLocationBtn">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                        <span>Use Current Location</span>
+                    </button>
+                    <button class="drawer-nav-item" id="menuSearchBtn">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <span>Search Location</span>
+                    </button>
+                    <button class="drawer-nav-item" id="menuHistoryBtn">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <span>7-Day AQI History</span>
+                    </button>
+                    <button class="drawer-nav-item" id="menuPollutantsBtn">
+                        <i class="fa-solid fa-smog"></i>
+                        <span>Pollutant Breakdown</span>
+                    </button>
+                    <button class="drawer-nav-item" id="menuAdvisoryBtn">
+                        <i class="fa-solid fa-shield-heart"></i>
+                        <span>Health Recommendations</span>
+                    </button>
+                    <button class="drawer-nav-item" id="menuAuthorityBtn">
+                        <i class="fa-solid fa-building-flag"></i>
+                        <span>Municipal Report</span>
+                    </button>
+                    <button class="drawer-nav-item" id="menuRefreshBtn">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Refresh Data</span>
+                    </button>
+                </div>
+                <div class="drawer-footer-info">
+                    <p>Indian National Air Quality Index (CPCB)</p>
+                    <p id="drawerLastUpdated">Ready</p>
+                </div>
+            </aside>
+            <div id="drawerBackdrop" class="drawer-backdrop"></div>
+
+        </div> <!-- /mobile-frame -->
+    </div> <!-- /app-viewport -->
+
+    <!-- App Logic Script -->
+    <script src="app.js"></script>
+</body>
+
+</html>
